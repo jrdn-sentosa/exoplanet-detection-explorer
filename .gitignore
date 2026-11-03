@@ -16,3 +16,6 @@ __pycache__/
 
 # raw archive downloads (any PSCompPars_* csv, either casing) are not committed
 [Pp][Ss][Cc]omp[Pp]ars_*.csv
+
+# download metadata sidecar written next to the raw CSV
+data/raw/*.source.json
