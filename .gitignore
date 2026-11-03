@@ -1,0 +1,18 @@
+# secrets
+.env
+.env.*
+!.env.example
+
+# virtual environments
+.venv/
+venv/
+
+# caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ipynb_checkpoints/
+.DS_Store
+
+# raw archive downloads (any PSCompPars_* csv, either casing) are not committed
+[Pp][Ss][Cc]omp[Pp]ars_*.csv

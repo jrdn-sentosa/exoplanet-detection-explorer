@@ -1,0 +1,5 @@
+{
+  "download_date": "2026-11-03",
+  "source_url": "https://exoplanetarchive.ipac.caltech.edu/TAP/sync?query=select+%2A+from+pscomppars&format=csv",
+  "table": "pscomppars"
+}

@@ -1,0 +1,16 @@
+[project]
+name = "exoplanet-cleaning"
+version = "0.1.0"
+description = "Clean NASA Exoplanet Archive PSCompPars data for an Observable Plot notebook"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["pandas>=2.2"]
+
+[dependency-groups]
+dev = ["pytest>=8.0"]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
