@@ -38,20 +38,29 @@ COLUMNS = {
     "pl_rade": ("radius_earth", "num", "Q", "Earth radii", "Planet radius"),
     "pl_bmasse": ("mass_earth", "num", "Q", "Earth masses",
                   "Best available mass (true mass, else M*sin(i)/sin(i), else M*sin(i)); see mass_source"),
-    "pl_bmassprov": ("mass_source", "text", "N", "", "Provenance of the best mass (Mass, Msini, Msini/sini)"),
+    "pl_bmassprov": ("mass_source", "text", "N", "", "Provenance of the best mass (Mass, Msin(i)/sin(i), Msini, M-R relationship)"),
     "pl_eqt": ("equilibrium_temp_k", "num", "Q", "K", "Equilibrium temperature (black-body, heated by host star only)"),
     "sy_dist": ("distance_pc", "num", "Q", "parsecs", "Distance to the planetary system"),
 }
 NUMERIC = [v[0] for v in COLUMNS.values() if v[1] == "num"]
-# mass_source values documented as a minimum mass (lower limit): counted as "estimated".
-ESTIMATED_MASS_VALUES = {"Msini"}
-# documented as true/derived masses: counted as not estimated.
-NOT_ESTIMATED_MASS_VALUES = {"Mass", "Msin(i)/sin(i)", "Msini/sini"}
-# any other value (e.g. "M-R relationship") is undocumented -> mass_is_estimated left blank pending a decision.
+# mass_source -> mass_type; mass_is_estimated is true only for "estimated" (M-R relationship).
+MASS_TYPE = {
+    "Mass": "measured",
+    "Msin(i)/sin(i)": "derived_from_inclination",
+    "Msini": "minimum_mass",
+    "M-R relationship": "estimated",
+}
+RADIUS_REF_COL = "pl_rade_reflink"
+# The archive writes the reference of a calculated radius as <a refstr=CALCULATED_VALUE ...>Calculated Value</a>
+# (docs: https://exoplanetarchive.ipac.caltech.edu/docs/pscp_calc.html).
+CALCULATED_RADIUS_TEXT = "Calculated Value"
 DERIVED = {
     "method_group": ("N", "", "method", f"Top {TOP_N_METHODS} discovery methods by planet count; all others labelled '{OTHER_LABEL}'"),
     "has_scatter_values": ("N", "", "orbital_period_days, radius_earth", "true only if orbital period AND radius are both > 0 (usable on a log-log scatterplot)"),
-    "mass_is_estimated": ("N", "", "mass_source", "true if mass_source is 'Msini' (minimum mass only, not a true mass); false for 'Mass' and 'Msin(i)/sin(i)'; blank for undocumented values such as 'M-R relationship'"),
+    "mass_type": ("N", "", "mass_source (and mass_earth)", "measured (Mass), derived_from_inclination (Msin(i)/sin(i)), minimum_mass (Msini), estimated (M-R relationship); blank when mass_earth is missing"),
+    "mass_is_estimated": ("N", "", "mass_source (and mass_earth)", "true only for mass_source 'M-R relationship'; false for the other mass types; blank when mass_earth is missing"),
+    "radius_reference": ("N", "", "pl_rade_reflink", "Publication the radius came from, or 'Calculated Value'; HTML link markup removed; blank when radius is missing"),
+    "radius_is_estimated": ("N", "", "pl_rade_reflink (and radius_earth)", "true if the archive calculated the radius (reference = 'Calculated Value', from mass via Chen & Kipping 2017); false otherwise; blank when radius is missing"),
 }
 SPOT_CHECK_NAMES = ["51 Peg b", "Kepler-22 b", "TRAPPIST-1 e", "Proxima Cen b"]
 
@@ -90,6 +99,7 @@ def read_raw(path):
 
 def check_columns(raw):
     missing = [c for c in COLUMNS if c not in raw.columns]
+    missing += [c for c in [RADIUS_REF_COL] if c not in raw.columns]
     if missing:
         sys.exit(f"STOP: expected columns missing from raw file: {missing}. Check {DOCS_URL}")
 
@@ -121,9 +131,19 @@ def clean(raw):
     out["method_group"] = out["method"].map(lambda m: "" if m == "" else (m if m in top else OTHER_LABEL))
     # scatter flag
     out["has_scatter_values"] = (out["orbital_period_days"] > 0) & (out["radius_earth"] > 0)
-    # mass_is_estimated: blank when mass_source is blank
-    out["mass_is_estimated"] = out["mass_source"].map(
-        lambda v: "true" if v in ESTIMATED_MASS_VALUES else ("false" if v in NOT_ESTIMATED_MASS_VALUES else ""))
+    # mass_type / mass_is_estimated. Unknown mass_source values -> stop and ask.
+    unknown = sorted(set(out["mass_source"]) - set(MASS_TYPE) - {""})
+    if unknown:
+        sys.exit(f"STOP: unrecognised mass_source value(s) {unknown}; decide how to classify them.")
+    has_mass = out["mass_earth"].notna()
+    out["mass_type"] = out["mass_source"].map(MASS_TYPE).fillna("").where(has_mass, "")
+    out["mass_is_estimated"] = out["mass_type"].map(lambda t: "" if t == "" else ("true" if t == "estimated" else "false"))
+    # radius_reference / radius_is_estimated
+    ref = raw[RADIUS_REF_COL].str.replace(r"<[^>]+>", "", regex=True).str.strip().str.replace(r"\s+", " ", regex=True)
+    has_rad = out["radius_earth"].notna()
+    out["radius_reference"] = ref.where(has_rad, "")
+    out["radius_is_estimated"] = out["radius_reference"].map(
+        lambda t: "" if t == "" else ("true" if t == CALCULATED_RADIUS_TEXT else "false"))
     out["has_scatter_values"] = out["has_scatter_values"].map({True: "true", False: "false"})
     return out, top, problems
 
@@ -264,26 +284,53 @@ def build_report(raw_path, info, raw, out, top, problems):
         a(f"- Case-insensitive duplicates: {sorted(set(names[folded.index]))}")
     a(f"- Blank planet names: {int((names == '').sum())}\n")
 
-    a("## mass_is_estimated")
-    a("Docs (pl_bmassprov): `Mass` = measured mass; `Msini/sini` = true mass computed from a minimum mass plus inclination; "
-      "`Msini` = minimum mass from radial velocity, no inclination correction.")
-    a(f"- Counted as estimated (true): {sorted(ESTIMATED_MASS_VALUES)} — a lower limit, not a true mass.")
-    a(f"- Counted as not estimated (false): {sorted(NOT_ESTIMATED_MASS_VALUES)}")
-    a("- Left BLANK: any other value, e.g. `M-R relationship` (present in the data but NOT in the docs page checked; "
-      "it is probably a mass modelled from radius, but I did not assume that). **Decision needed.**")
-    a(md_table(out["mass_source"].replace("", "(blank)").value_counts().rename_axis("mass_source").reset_index(name="planets")))
-    a(f"\nmass_is_estimated: true={int((out['mass_is_estimated']=='true').sum())}, "
-      f"false={int((out['mass_is_estimated']=='false').sum())}, blank={int((out['mass_is_estimated']=='').sum())}\n")
+    a("## Mass type and mass_is_estimated")
+    a("Mapping from mass_source (any other non-blank value stops the script): "
+      + ", ".join(f"`{k}` -> {v}" for k, v in MASS_TYPE.items()) + ". Blank when mass_earth is missing.")
+    mt = out["mass_type"].replace("", "(blank: mass missing)").value_counts().rename_axis("mass_type").reset_index(name="planets")
+    a(md_table(mt))
+    a("")
+    a(f"mass_is_estimated: true={int((out['mass_is_estimated']=='true').sum())}, "
+      f"false={int((out['mass_is_estimated']=='false').sum())}, blank={int((out['mass_is_estimated']=='').sum())}")
+    a("")
+
+    a("## Radius: radius_is_estimated")
+    a(f"Identified by the radius reference column `{RADIUS_REF_COL}`: the archive writes 'Calculated Value' there when it "
+      "computed a radius itself (for planets with a mass but no published radius, using the Chen & Kipping 2017 "
+      "mass-radius relation; archive docs: https://exoplanetarchive.ipac.caltech.edu/docs/pscp_calc.html). "
+      "true = reference is 'Calculated Value'; false = any other reference; blank = radius missing. "
+      "Note: 'false' means published by a source, which may itself include model-based values.")
+    ri = out["radius_is_estimated"].replace("", "(blank: radius missing)").value_counts().rename_axis("radius_is_estimated").reset_index(name="planets")
+    a(md_table(ri))
+    a("")
+    a("### Method by radius_is_estimated")
+    ct = pd.crosstab(out["method"], out["radius_is_estimated"].replace("", "(radius missing)"))
+    for col in ["true", "false", "(radius missing)"]:
+        if col not in ct.columns:
+            ct[col] = 0
+    ct = ct[["true", "false", "(radius missing)"]]
+    ct["total"] = ct.sum(axis=1)
+    ct = ct.sort_values("total", ascending=False).reset_index()
+    a(md_table(ct))
+    a("")
+    sc = out[out["has_scatter_values"] == "true"]
+    a("### Scatterplot planets by radius type")
+    a(f"- Measured/published radius (radius_is_estimated = false): {int((sc['radius_is_estimated']=='false').sum())}")
+    a(f"- Estimated radius (radius_is_estimated = true): {int((sc['radius_is_estimated']=='true').sum())}")
+    a(f"- Total on scatterplot: {len(sc)}")
+    a("")
 
     a("## Spot checks (raw vs clean)")
     a(spot_checks(raw, out))
 
     a("## Anything unusual / uncertain")
-    a("- OPEN QUESTION: `mass_source = 'M-R relationship'` is undocumented on the column page, so mass_is_estimated is blank for those planets.")
+    a("- `M-R relationship` is not listed in the archive's pl_bmassprov column docs, but you specified it as 'estimated'; it is used as such.")
+    a(f"- Planets with mass missing: {int((out['mass_type']=='').sum())} (all blank mass_type / mass_is_estimated).")
+    nref = int(((out['radius_earth'].notna()) & (out['radius_reference'] == '')).sum())
+    a(f"- Radius present but reference blank: {nref} (radius_is_estimated left blank for these).")
     mx = out["orbital_period_days"].max()
     a(f"- Max orbital_period_days = {mx:.4g} ({out.loc[out['orbital_period_days'].idxmax(), 'planet']}); extreme but positive, left as is.")
-    a("- Judgement call: `Msini/sini` is treated as NOT estimated (it is a derived true mass). Say if you'd rather count it.")
-    a("- Judgement call: `mass_earth` mixes true masses and minimum masses; use mass_is_estimated/mass_source before comparing.")
+    a("- `mass_earth` mixes measured, derived and minimum masses; use mass_type before comparing.")
     a("- Judgement call: `year` typed O in the dictionary; method_group is blank where method is blank.")
     if problems:
         for c, v in problems.items():

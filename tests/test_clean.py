@@ -69,8 +69,6 @@ def test_derived_flags(clean):
     assert (clean["has_scatter_values"] == expected).all()
     groups = set(clean["method_group"]) - {"", ce.OTHER_LABEL}
     assert len(groups) <= ce.TOP_N_METHODS
-    assert (clean.loc[clean["method"] == "", "mass_is_estimated"] == "").all() or True
-    assert (clean.loc[clean["mass_source"] == "", "mass_is_estimated"] == "").all()
 
 
 def test_spot_check_five_planets_incl_missing(raw, clean):
@@ -88,3 +86,33 @@ def test_spot_check_five_planets_incl_missing(raw, clean):
                 assert float(rv) == float(cv)
             else:
                 assert rv == cv
+
+
+def test_mass_type_and_flag(raw, clean):
+    allowed = set(ce.MASS_TYPE)
+    assert set(raw["pl_bmassprov"].str.strip()) - {""} <= allowed, "new mass_source value: ask before classifying"
+    mass_missing = clean["mass_earth"] == ""
+    expected = clean["mass_source"].map(ce.MASS_TYPE).where(~mass_missing, "")
+    assert (clean["mass_type"] == expected).all()
+    assert (clean.loc[mass_missing, ["mass_type", "mass_is_estimated"]] == "").all().all()
+    pres = ~mass_missing
+    assert ((clean.loc[pres, "mass_is_estimated"] == "true") == (clean.loc[pres, "mass_source"] == "M-R relationship")).all()
+    assert set(clean.loc[pres, "mass_is_estimated"]) <= {"true", "false"}
+    for src, typ in {"Mass": "measured", "Msin(i)/sin(i)": "derived_from_inclination",
+                     "Msini": "minimum_mass", "M-R relationship": "estimated"}.items():
+        sel = pres & (clean["mass_source"] == src)
+        assert sel.any() and (clean.loc[sel, "mass_type"] == typ).all()
+
+
+def test_radius_is_estimated(raw, clean):
+    rad_missing = clean["radius_earth"] == ""
+    assert (clean.loc[rad_missing, ["radius_reference", "radius_is_estimated"]] == "").all().all()
+    calc = raw["pl_rade_reflink"].str.contains("CALCULATED_VALUE")
+    pres = ~rad_missing
+    assert ((clean.loc[pres, "radius_is_estimated"] == "true") == calc[pres]).all()
+    assert set(clean.loc[pres, "radius_is_estimated"]) <= {"true", "false"}
+    assert not clean["radius_reference"].str.contains("<").any()
+    # calculated radii carry no uncertainty in the archive (docs), a consistency check on the identification
+    assert (raw.loc[calc & pres, "pl_radeerr1"].str.strip() == "").all()
+    # never co-occurs with a mass that was itself computed from radius
+    assert not (calc & (raw["pl_bmassprov"] == "M-R relationship")).any()

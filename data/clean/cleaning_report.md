@@ -24,7 +24,10 @@
 | distance_pc | 28 | 0.43% |
 | method_group | 0 | 0.00% |
 | has_scatter_values | 0 | 0.00% |
-| mass_is_estimated | 3035 | 47.05% |
+| mass_type | 30 | 0.47% |
+| mass_is_estimated | 30 | 0.47% |
+| radius_reference | 50 | 0.78% |
+| radius_is_estimated | 50 | 0.78% |
 
 ## Numeric summary (non-missing values)
 | column | n | min | median | max |
@@ -81,19 +84,45 @@
 - None found (exact or case-insensitive).
 - Blank planet names: 0
 
-## mass_is_estimated
-Docs (pl_bmassprov): `Mass` = measured mass; `Msini/sini` = true mass computed from a minimum mass plus inclination; `Msini` = minimum mass from radial velocity, no inclination correction.
-- Counted as estimated (true): ['Msini'] — a lower limit, not a true mass.
-- Counted as not estimated (false): ['Mass', 'Msin(i)/sin(i)', 'Msini/sini']
-- Left BLANK: any other value, e.g. `M-R relationship` (present in the data but NOT in the docs page checked; it is probably a mass modelled from radius, but I did not assume that). **Decision needed.**
-| mass_source | planets |
+## Mass type and mass_is_estimated
+Mapping from mass_source (any other non-blank value stops the script): `Mass` -> measured, `Msin(i)/sin(i)` -> derived_from_inclination, `Msini` -> minimum_mass, `M-R relationship` -> estimated. Blank when mass_earth is missing.
+| mass_type | planets |
 |---|---|
-| M-R relationship | 3035 |
-| Mass | 2477 |
-| Msini | 924 |
-| Msin(i)/sin(i) | 15 |
+| estimated | 3035 |
+| measured | 2477 |
+| minimum_mass | 894 |
+| (blank: mass missing) | 30 |
+| derived_from_inclination | 15 |
 
-mass_is_estimated: true=924, false=2492, blank=3035
+mass_is_estimated: true=3035, false=3386, blank=30
+
+## Radius: radius_is_estimated
+Identified by the radius reference column `pl_rade_reflink`: the archive writes 'Calculated Value' there when it computed a radius itself (for planets with a mass but no published radius, using the Chen & Kipping 2017 mass-radius relation; archive docs: https://exoplanetarchive.ipac.caltech.edu/docs/pscp_calc.html). true = reference is 'Calculated Value'; false = any other reference; blank = radius missing. Note: 'false' means published by a source, which may itself include model-based values.
+| radius_is_estimated | planets |
+|---|---|
+| false | 4862 |
+| true | 1539 |
+| (blank: radius missing) | 50 |
+
+### Method by radius_is_estimated
+| method | true | false | (radius missing) | total |
+|---|---|---|---|---|
+| Transit | 2 | 4782 | 1 | 4785 |
+| Radial Velocity | 1134 | 33 | 37 | 1204 |
+| Microlensing | 292 | 0 | 0 | 292 |
+| Imaging | 53 | 41 | 4 | 98 |
+| Transit Timing Variations | 25 | 3 | 1 | 29 |
+| Eclipse Timing Variations | 15 | 0 | 2 | 17 |
+| Orbital Brightness Modulation | 3 | 3 | 3 | 9 |
+| Pulsar Timing | 6 | 0 | 2 | 8 |
+| Astrometry | 6 | 0 | 0 | 6 |
+| Pulsation Timing Variations | 2 | 0 | 0 | 2 |
+| Disk Kinematics | 1 | 0 | 0 | 1 |
+
+### Scatterplot planets by radius type
+- Measured/published radius (radius_is_estimated = false): 4834
+- Estimated radius (radius_is_estimated = true): 1216
+- Total on scatterplot: 6050
 
 ## Spot checks (raw vs clean)
 **51 Peg b**
@@ -172,9 +201,10 @@ mass_is_estimated: true=924, false=2492, blank=3035
 | distance_pc | 264.78000000 | 264.78 | yes |
 
 ## Anything unusual / uncertain
-- OPEN QUESTION: `mass_source = 'M-R relationship'` is undocumented on the column page, so mass_is_estimated is blank for those planets.
+- `M-R relationship` is not listed in the archive's pl_bmassprov column docs, but you specified it as 'estimated'; it is used as such.
+- Planets with mass missing: 30 (all blank mass_type / mass_is_estimated).
+- Radius present but reference blank: 0 (radius_is_estimated left blank for these).
 - Max orbital_period_days = 4.02e+08 (COCONUTS-2 b); extreme but positive, left as is.
-- Judgement call: `Msini/sini` is treated as NOT estimated (it is a derived true mass). Say if you'd rather count it.
-- Judgement call: `mass_earth` mixes true masses and minimum masses; use mass_is_estimated/mass_source before comparing.
+- `mass_earth` mixes measured, derived and minimum masses; use mass_type before comparing.
 - Judgement call: `year` typed O in the dictionary; method_group is blank where method is blank.
 - All non-blank numeric cells parsed cleanly.
