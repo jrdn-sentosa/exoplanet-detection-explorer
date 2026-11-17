@@ -19,3 +19,7 @@ __pycache__/
 
 # download metadata sidecar written next to the raw CSV
 data/raw/*.source.json
+
+# Observable Notebook Kit cache
+notebook/.vite/
+notebook/node_modules/

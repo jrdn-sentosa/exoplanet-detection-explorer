@@ -1,0 +1,11 @@
+{
+  "name": "exoplanet-detection-explorer",
+  "private": true,
+  "scripts": {
+    "preview": "notebooks preview",
+    "sync-data": "node -e \"require('fs').copyFileSync('../data/clean/exoplanets_clean.csv','exoplanets_clean.csv')\""
+  },
+  "devDependencies": {
+    "@observablehq/notebook-kit": "^2.11.0"
+  }
+}

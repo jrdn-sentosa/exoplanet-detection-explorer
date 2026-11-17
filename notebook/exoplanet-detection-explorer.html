@@ -1,0 +1,407 @@
+<!doctype html>
+<notebook theme="air">
+  <title>Exoplanet Detection Explorer</title>
+  <script id="1" type="text/markdown">
+    # Exoplanet Detection Explorer
+  </script>
+  <script id="45" type="application/vnd.observable.javascript">
+    html`<div style="
+      background: linear-gradient(rgba(11,13,23,0.55), rgba(11,13,23,0.55)), url(${starsUrl}) center / cover;
+      color: #e6e6e6; padding: 24px; border-radius: 12px;
+      display: grid; grid-template-columns: ${width > 900 ? "auto auto" : "auto"};
+      gap: 24px; align-items: stretch; justify-content: start;">
+      <div style="background: #0b0d17; padding: 16px; border-radius: 8px;">
+        <h4 style="color: #f2f2f2; font-size: 19px; margin: 0 0 8px;">${scatterTitle}</h4>
+        ${legend}
+        ${viewof brushed}
+        <div style="font-family: system-ui, sans-serif; color: #c8cad3; font-size: 13px; line-height: 1.45; max-width: 62ch; margin-top: 8px;">
+          Hollow gray points use values the archive calculated from another measurement, not measured directly. Many estimated radii sit in a flat band near Jupiter's size because of how that calculation treats giant planets.
+        </div>
+      </div>
+      <div style="background: #0b0d17; padding: 16px; border-radius: 8px;">
+        <h4 style="color: #f2f2f2; font-size: 19px; margin: 0 0 8px;">Transit found about 74% of planets</h4>
+        ${methodChart}
+        <h4 style="color: #f2f2f2; font-size: 19px; margin: 16px 0 8px;">Kepler drove the 2014 and 2016 spikes</h4>
+        ${yearChart}
+      </div>
+      <div style="grid-column: 1 / -1; background: #0b0d17; padding: 12px 16px; border-radius: 8px; color: #e6e6e6;">
+        ${counts}
+      </div>
+    </div>
+    ${detailsTable}`
+  </script>
+  <script id="15" type="text/markdown">
+    ## Controls
+  </script>
+  <script id="14" type="application/vnd.observable.javascript">
+    viewof methods = Inputs.checkbox(allMethods, {label: "Discovery method", value: allMethods})
+  </script>
+  <script id="16" type="application/vnd.observable.javascript">
+    viewof years = Inputs.form({
+      start: Inputs.range(yearExtent, {label: "From", step: 1, value: yearExtent[0]}),
+      end: Inputs.range(yearExtent, {label: "To", step: 1, value: yearExtent[1]})
+    })
+  </script>
+  <script id="17" type="application/vnd.observable.javascript">
+    viewof yField = Inputs.radio(
+      new Map([["Radius (Earth radii)", "radius_earth"], ["Mass (Earth masses)", "mass_earth"]]),
+      {label: "Y axis", value: "radius_earth"}
+    )
+  </script>
+  <script id="18" type="application/vnd.observable.javascript">
+    viewof showEstimates = Inputs.toggle({label: "Show estimated values", value: true})
+  </script>
+  <script id="19" type="application/vnd.observable.javascript">
+    viewof brushMode = Inputs.toggle({label: "Drag to select (turns off tooltips)", value: true})
+  </script>
+  <script id="20" type="application/vnd.observable.javascript">
+    viewof reset = Inputs.button("Clear selection")
+  </script>
+  <script id="58" type="application/vnd.observable.javascript">
+    viewof resetAll = Inputs.button("Reset all settings", {
+      reduce: () => {
+        const set = (view, value) => {
+          view.value = value;
+          view.dispatchEvent(new Event("input", {bubbles: true}));
+        };
+        set(viewof methods, allMethods);
+        set(viewof years, {start: yearExtent[0], end: yearExtent[1]});
+        set(viewof yField, "radius_earth");
+        set(viewof showEstimates, true);
+        set(viewof brushMode, true);
+      }
+    })
+  </script>
+  <script id="59" type="text/markdown">
+    ## About the data
+
+    This explorer uses the NASA Exoplanet Archive's [Planetary Systems Composite Parameters table](https://exoplanetarchive.ipac.caltech.edu/cgi-bin/TblView/nph-tblView?app=ExoTbls&config=PSCompPars), downloaded on November 3, 2026. It has one row per confirmed planet, **${data.length.toLocaleString()}** in total. Some values come from different published papers, so a planet's measurements aren't always from a single study.
+
+    ### What the fields mean
+
+    - **Orbital period:** days the planet takes to orbit its star
+    - **Radius:** size compared with Earth (Earth = 1, Jupiter ≈ 11.2)
+    - **Mass:** mass compared with Earth (Jupiter ≈ 318)
+    - **Discovery method and year:** how and when the planet was first reported
+    - **Facility:** the telescope or observatory credited with the discovery
+
+    ### How each method finds planets
+
+    - **Transit:** the planet dims its star as it passes in front, which reveals its **size**. It favors large planets on short orbits.
+    - **Radial velocity:** the planet makes its star wobble, which reveals its **mass**. It usually gives a minimum mass, because the orbit's tilt is often unknown.
+    - **Microlensing:** the planet's gravity briefly brightens a more distant star. It rarely measures an orbital period, so most of these planets can't appear on the scatterplot.
+    - **Imaging:** telescopes photograph the planet directly. It favors large, young planets far from their stars.
+    - **Timing methods:** a planet shifts the timing of a regular signal, such as a pulsar's pulses or another planet's transits.
+
+    The chart colors the five most common methods and groups the rest as "Other."
+
+    ### Measured and estimated values
+
+    - **Hollow gray points** show values the archive calculated from another measurement. When a planet has a mass but no measured radius, the archive estimates the radius with a mass-radius formula. That's why many radial velocity planets sit in a flat band near Jupiter's size.
+    - **Mass types** in the tooltips and table:
+      - **Measured:** a true mass
+      - **Minimum mass (Msini):** a lower limit, since the true mass may be larger
+      - **Derived from inclination:** a minimum mass corrected using the orbit's tilt
+      - **Estimated:** calculated from radius with a mass-radius formula
+
+    ### Why some planets don't appear
+
+    The scatterplot needs both an orbital period and a value on the current y-axis. Planets missing either are hidden, and the counts above show how many. The method bars still include them, so the gap between bar length and plotted count shows what each method can't measure.
+
+    ### What this data can't tell you
+
+    These are the planets we've found, not all the planets that exist. Each method detects some kinds of planets more easily than others, so empty regions on the chart may reflect detection limits rather than true rarity. The archive keeps adding planets, so counts change over time.
+
+    ### Sources and credits
+
+    - **Data:** NASA Exoplanet Archive, [Planetary Systems Composite Parameters](https://www.ipac.caltech.edu/doi/10.26133/NEA13), DOI 10.26133/NEA13, accessed November 3, 2026. This research has made use of the NASA Exoplanet Archive, which is operated by the California Institute of Technology, under contract with the National Aeronautics and Space Administration under the Exoplanet Exploration Program.
+    - **Cleaning code and documentation:** [https://github.com/jrdn-sentosa/exoplanet-detection-explorer](https://github.com/jrdn-sentosa/exoplanet-detection-explorer)
+    - **Brushing:** adapted from D3's [brushable scatterplot](https://observablehq.com/notebook-kit/ex/d3/brushable-scatterplot) example
+    - **Background image:** sky around GG Tauri. Image credit: ESO/Digitized Sky Survey 2. Acknowledgement: Davide De Martin. Via [Space.com](https://www.space.com/27600-around-a-star-system-space-wallpaper.html).
+  </script>
+  <script id="12" type="text/markdown">
+    ## Data and shared settings
+  </script>
+  <script id="3" type="application/vnd.observable.javascript">
+    data = FileAttachment("exoplanets_clean.csv").csv({typed: true})
+  </script>
+  <script id="56" type="application/vnd.observable.javascript">
+    starsUrl = FileAttachment("stars.jpg").url()
+  </script>
+  <script id="5" type="application/vnd.observable.javascript">
+    allMethods = d3.groupSort(data, g => -g.length, d => d.method)
+  </script>
+  <script id="4" type="application/vnd.observable.javascript">
+    yearExtent = d3.extent(data, d => d.year)
+  </script>
+  <script id="7" type="application/vnd.observable.javascript">
+    groupDomain = {
+      const order = d3.groupSort(data, g => -g.length, d => d.method_group);
+      return [...order.filter(g => g !== "Other"), ...order.filter(g => g === "Other")];
+    }
+  </script>
+  <script id="8" type="application/vnd.observable.javascript">
+    colorScale = ({
+      type: "categorical",
+      domain: groupDomain,
+      range: ["#56B4E9", "#E69F00", "#CC79A7", "#009E73", "#F0E442", "#D55E00"]
+    })
+  </script>
+  <script id="9" type="application/vnd.observable.javascript">
+    mainWidth = width > 900 ? Math.floor((width - 140) * 0.58) : width - 80
+  </script>
+  <script id="10" type="application/vnd.observable.javascript">
+    sideWidth = width > 900 ? Math.floor((width - 140) * 0.42) : width - 80
+  </script>
+  <script id="47" type="application/vnd.observable.javascript">
+    refs = [
+      {name: "Earth", orbital_period_days: 365.25, radius_earth: 1, mass_earth: 1},
+      {name: "Jupiter", orbital_period_days: 4332.6, radius_earth: 11.21, mass_earth: 317.8}
+    ]
+  </script>
+  <script id="57" type="application/vnd.observable.javascript">
+    scatterTitle = yField === "radius_earth"
+      ? "Few known planets resemble Earth in size and orbit"
+      : "Measured masses come mostly from radial velocity, at longer orbits"
+  </script>
+  <script id="22" type="text/markdown">
+    ## Filtered and selected data
+  </script>
+  <script id="23" type="application/vnd.observable.javascript">
+    filtered = {
+      const y0 = Math.min(years.start, years.end);
+      const y1 = Math.max(years.start, years.end);
+      const chosen = new Set(methods);
+      return data.filter(d => chosen.has(d.method) && d.year >= y0 && d.year <= y1);
+    }
+  </script>
+  <script id="24" type="application/vnd.observable.javascript">
+    estimateFlag = yField === "radius_earth" ? "radius_is_estimated" : "mass_is_estimated"
+  </script>
+  <script id="25" type="application/vnd.observable.javascript">
+    isEstimated = d => String(d[estimateFlag]) === "true"
+  </script>
+  <script id="26" type="application/vnd.observable.javascript">
+    yLabel = yField === "radius_earth"
+      ? "Radius (Earth radii, log scale)"
+      : "Mass (Earth masses, log scale)"
+  </script>
+  <script id="27" type="application/vnd.observable.javascript">
+    visible = filtered.filter(d =>
+      d.orbital_period_days > 0 && d[yField] > 0 && (showEstimates || !isEstimated(d))
+    )
+  </script>
+  <script id="28" type="application/vnd.observable.javascript">
+    hasSelection = brushed !== null
+  </script>
+  <script id="29" type="application/vnd.observable.javascript">
+    selected = brushed ?? []
+  </script>
+  <script id="30" type="text/markdown">
+    ## Charts
+  </script>
+  <script id="34" type="text/markdown">
+    Scatterplot with brushing: the selection holds only the points currently shown. Changing a filter or the y-axis redraws the chart and clears the selection.
+  </script>
+  <script id="31" type="application/vnd.observable.javascript" pinned="">
+    viewof brushed = {
+      reset;
+      const ml = 56, mr = 20, mt = 20, mb = 44, H = 460;
+
+      if (visible.length === 0) {
+        const empty = html`<p>No planets match these filters.</p>`;
+        empty.value = null;
+        return empty;
+      }
+
+      const channels = {Planet: "planet", Host: "host", Method: "method", Year: "year", "Mass type": "mass_type"};
+
+      const chart = Plot.plot({
+        width: mainWidth, height: H,
+        marginLeft: ml, marginRight: mr, marginTop: mt, marginBottom: mb,
+        style: "background: #0b0d17; color: #e6e6e6; --plot-background: #0b0d17; font-size: 12px;",
+        x: {type: "log", label: "Orbital period (days, log scale) →", grid: true},
+        y: {type: "log", label: `↑ ${yLabel}`, grid: true, tickFormat: "~g"},
+        color: colorScale,
+        marks: [
+          Plot.dot(visible.filter(isEstimated), {
+            x: "orbital_period_days", y: yField, r: 2.5,
+            fill: "none", stroke: "#cfcfcf", strokeOpacity: 0.4,
+            channels, tip: !brushMode
+          }),
+          Plot.dot(visible.filter(d => !isEstimated(d)), {
+            x: "orbital_period_days", y: yField, r: 2,
+            fill: "method_group", fillOpacity: 0.6,
+            channels, tip: !brushMode
+          }),
+          Plot.dot(refs, {
+            x: "orbital_period_days", y: yField, r: 6,
+            fill: "none", stroke: "currentColor", strokeWidth: 1.5
+          }),
+          Plot.text(refs, {
+            x: "orbital_period_days", y: yField, text: "name",
+            dx: 9, dy: 12, textAnchor: "start", fontWeight: 600
+          })
+        ]
+      });
+
+      chart.value = null;
+      if (!brushMode) return chart;
+
+      const x = chart.scale("x");
+      const y = chart.scale("y");
+
+      const brush = d3.brush()
+        .extent([[ml, mt], [mainWidth - mr, H - mb]])
+        .on("start brush end", ({selection}) => {
+          if (!selection) {
+            chart.value = null;
+          } else {
+            const [[x0, y0], [x1, y1]] = selection;
+            chart.value = visible.filter(d => {
+              const px = x.apply(d.orbital_period_days);
+              const py = y.apply(d[yField]);
+              return px >= x0 && px <= x1 && py >= y0 && py <= y1;
+            });
+          }
+          chart.dispatchEvent(new Event("input", {bubbles: true}));
+        });
+
+      d3.select(chart).append("g")
+        .call(brush)
+        .call(g => g.select(".selection")
+          .attr("fill", "#ffffff").attr("fill-opacity", 0.12).attr("stroke", "#ffffff"));
+
+      return chart;
+    }
+  </script>
+  <script id="35" type="text/markdown" pinned="">
+    Method bars: gray shows all filtered planets, and color shows the selection.
+  </script>
+  <script id="32" type="application/vnd.observable.javascript" pinned="">
+    methodChart = {
+      const totals = d3.rollup(filtered, v => v.length, d => d.method);
+      const sels = d3.rollup(selected, v => v.length, d => d.method);
+      const groupOf = new Map(filtered.map(d => [d.method, d.method_group]));
+
+      const plottedCounts = d3.rollup(visible, v => v.length, d => d.method);
+      const rows = d3.sort([...totals], ([, n]) => -n).map(([method, total]) => ({
+        method, total, sel: sels.get(method) ?? 0, group: groupOf.get(method),
+        plotted: plottedCounts.get(method) ?? 0
+      }));
+
+      const on = rows.filter(d => !hasSelection || d.sel > 0);
+      const off = rows.filter(d => hasSelection && d.sel === 0);
+      const countText = d => !hasSelection
+      ? d.total.toLocaleString()
+      : d.plotted === 0
+        ? "none plotted"
+        : `${d.sel.toLocaleString()} of ${d.plotted.toLocaleString()} plotted`;
+
+      return Plot.plot({
+        width: sideWidth, height: Math.max(180, rows.length * 24 + 40),
+        marginLeft: 190, marginRight: 140,
+        style: "background: #0b0d17; color: #e6e6e6; --plot-background: #0b0d17; font-size: 12px;",
+        x: {axis: null},
+        y: {domain: rows.map(d => d.method), axis: null},
+        color: colorScale,
+        marks: [
+          Plot.barX(rows, {x: "total", y: "method", fill: "#4b5068"}),
+          hasSelection ? Plot.barX(rows, {x: "sel", y: "method", fill: "group"}) : null,
+          hasSelection
+            ? Plot.dot(rows.filter(d => d.sel > 0), {x: "sel", y: "method", fill: "group", r: 4.5, stroke: "#0b0d17"})
+            : null,
+          Plot.text(on, {x: 0, y: "method", text: "method", textAnchor: "end", dx: -8,
+            fill: "#f2f2f2", fontWeight: hasSelection ? 700 : 400}),
+          Plot.text(off, {x: 0, y: "method", text: "method", textAnchor: "end", dx: -8, fill: "#6b7080"}),
+          Plot.text(on, {x: "total", y: "method", text: countText, textAnchor: "start", dx: 6, fill: "#f2f2f2"}),
+          Plot.text(off, {x: "total", y: "method", text: countText, textAnchor: "start", dx: 6, fill: "#6b7080"}),
+          Plot.ruleX([0])
+        ]
+      });
+    }
+  </script>
+  <script id="36" type="text/markdown" pinned="">
+    Discoveries by year: this counts years with no discoveries as zero, so the lines don’t join across gaps.
+  </script>
+  <script id="33" type="application/vnd.observable.javascript" pinned="">
+    yearCounts = {
+      if (filtered.length === 0) return {all: [], sel: []};
+      const range = d3.range(d3.min(filtered, d => d.year), d3.max(filtered, d => d.year) + 1);
+      const all = d3.rollup(filtered, v => v.length, d => d.year);
+      const sel = d3.rollup(selected, v => v.length, d => d.year);
+      return {
+        all: range.map(year => ({year, count: all.get(year) ?? 0})),
+        sel: range.map(year => ({year, count: sel.get(year) ?? 0}))
+      };
+    }
+  </script>
+  <script id="38" type="application/vnd.observable.javascript" pinned="">
+    yearChart = {
+      const peaks = yearCounts.all.filter(d => d.year === 2014 || d.year === 2016);
+      return Plot.plot({
+        width: sideWidth, height: 230, marginTop: 28,
+        style: "background: #0b0d17; color: #e6e6e6; --plot-background: #0b0d17; font-size: 12px;",
+        x: {label: "Discovery year", tickFormat: "d"},
+        y: {label: "↑ Planets", grid: true},
+        marks: [
+          Plot.areaY(yearCounts.all, {x: "year", y: "count", fill: "#8a8fa3", fillOpacity: 0.15}),
+          Plot.lineY(yearCounts.all, {x: "year", y: "count", stroke: "#8a8fa3", strokeWidth: 1.5}),
+          hasSelection
+            ? Plot.lineY(yearCounts.sel, {x: "year", y: "count", stroke: "currentColor", strokeWidth: 2, tip: true})
+            : null,
+          Plot.dot(peaks, {x: "year", y: "count", r: 3, fill: "currentColor"}),
+          Plot.text(peaks.filter(d => d.year === 2016), {x: "year", y: "count",
+          text: d => `${d.year}: ${d.count.toLocaleString()}`, dy: -10, textAnchor: "middle", fill: "currentColor"}),
+          Plot.text(peaks.filter(d => d.year === 2014), {x: "year", y: "count",
+          text: d => `${d.year}: ${d.count.toLocaleString()}`, dx: -8, textAnchor: "end", fill: "currentColor"}),
+          Plot.ruleY([0])
+        ]
+      });
+    }
+  </script>
+  <script id="39" type="text/markdown">
+    Counts and details table
+  </script>
+  <script id="40" type="application/vnd.observable.javascript" pinned="">
+    counts = html`<div style="font-family: system-ui, sans-serif; font-size: 15px; color: #e6e6e6; line-height: 1.5;">
+      <strong>${filtered.length.toLocaleString()}</strong> planets match the filters.
+      <strong>${visible.length.toLocaleString()}</strong> appear on the scatterplot, and
+      ${(filtered.length - visible.length).toLocaleString()} are hidden because a value is missing${showEstimates ? "" : " or estimated"}.
+      <div style="margin-top: 4px; color: #c8cad3;">
+        ${hasSelection
+          ? html`<strong>${selected.length.toLocaleString()}</strong> are selected.`
+          : "Drag across the scatterplot to select planets."}
+      </div>
+    </div>`
+  </script>
+  <script id="41" type="application/vnd.observable.javascript" pinned="">
+    detailsTable = Inputs.table(hasSelection ? selected : visible, {
+      columns: ["planet", "host", "method", "year", "facility", "orbital_period_days", "radius_earth", "mass_earth", "mass_type"],
+      header: {
+        planet: "Planet", host: "Host star", method: "Method", year: "Year", facility: "Facility",
+        orbital_period_days: "Period (days)", radius_earth: "Radius (Earth)", mass_earth: "Mass (Earth)", mass_type: "Mass type"
+      },
+      format: {year: d => d},
+      rows: 10
+    })
+  </script>
+  <script id="54" type="application/vnd.observable.javascript" pinned="">
+    Inputs.table(
+      d3.flatRollup(
+        data.filter(d => d.year === 2014 || d.year === 2016),
+        v => v.length,
+        d => d.year,
+        d => d.facility
+      )
+        .map(([year, facility, count]) => ({year, facility, count}))
+        .sort((a, b) => d3.ascending(a.year, b.year) || d3.descending(a.count, b.count))
+    )
+  </script>
+  <script id="48" type="text/markdown">
+    Legend
+  </script>
+  <script id="44" type="application/vnd.observable.javascript" pinned="">
+    legend = Plot.legend({color: colorScale})
+  </script>
+</notebook>
